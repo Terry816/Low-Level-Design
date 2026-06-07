@@ -93,7 +93,7 @@ class Game:
         try:
             row = self.board.placePiece(column, self.current_player.color)
         except OutofBoundsError as e:
-            print("Retry and input a valid move")
+            print(f"Invalid Move: {e}\nPlease try Again")
             return False
         
         if self.board.checkWinner(row, column, self.current_player.color):
@@ -125,12 +125,12 @@ class Board:
             if not self.grid[i][column]:
                 self.grid[i][column] = color
                 return i
-        return -1
+        raise OutofBoundsError("Column is Full")
     
     def checkDraw(self):
         return True if all(self.grid[0]) else False
     
-    def checkWinner(self, column, row, color) -> bool:
+    def checkWinner(self, row, column, color) -> bool:
         directions = [[0,1], [1,0], [1,1], [1, -1]]
 
         for dr, dc in directions:
@@ -142,7 +142,7 @@ class Board:
         return False
 
     def countColors(self, row, col, dr, dc, color):
-        if row < 0 or row >= self.row or col < 0 or col > self.column:
+        if row < 0 or row >= self.row or col < 0 or col >= self.column:
             return 0
         if self.grid[row][col] != color:
             return 0
@@ -157,6 +157,7 @@ if __name__ == "__main__":
     game.makeMove(2)
     game.makeMove(3)
     game.makeMove(2)
+    game.makeMove(10)
     game.makeMove(3)
     game.makeMove(2)
     game.makeMove(3)
