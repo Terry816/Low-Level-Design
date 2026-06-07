@@ -52,10 +52,17 @@ class Player:
     
 """
 from enum import Enum
+from dataclasses import dataclass
 
 class Color(Enum):
-    RED = 1
-    BLUE = 2
+    RED = "RED"
+    BLUE = "BLUE"
+
+class GameStatus(Enum):
+    IN_PROGRESS = "IN_PROGRESS"
+    WINNER = "WINNER"
+    DRAW = "DRAW"
+
 
 class OutofBoundsError(Exception):
     pass
@@ -63,30 +70,37 @@ class OutofBoundsError(Exception):
 class GameFinishError(Exception):
     pass
 
+@dataclass
+class Player:
+    name: str
+    color: Color
+
 class Game:
-    def __init__(self, player1: Player, player2: Player, board: Board):
+    def __init__(self, player1: Player, player2: Player):
         self.player1 = player1
         self.player2 = player2
-        self.board = board
+        self.board = Board()
         self.current_player = player1
-        self.game_status = "IN_PROGRESS"
+        self.game_status = GameStatus.IN_PROGRESS
         self.winner = None
     
     #+ makeMove(column) -> bool (True if it works, Raise an Error if invalid)
     def makeMove(self, column):
-        if self.determineStatus() == "WINNER":
+        if self.determineStatus() == GameStatus.WINNER:
             raise GameFinishError("Game is Finished")
-        if not self.board.isValidMove():
-            raise OutofBoundsError("Invalid column")
         
         column -= 1 #users will see columns, but this is used for index
-
-        row = self.board.placePiece(column, self.current_player.color)
-        if self.board.checkWinner(row, column):
-            self.game_status = "WINNER"
+        try:
+            row = self.board.placePiece(column, self.current_player.color)
+        except OutofBoundsError as e:
+            print("Retry and input a valid move")
+            return False
+        
+        if self.board.checkWinner(row, column, self.current_player.color):
+            self.game_status = GameStatus.WINNER
             self.winner = self.current_player
         elif self.board.checkDraw():
-            self.game_status = "DRAW"
+            self.game_status = GameStatus.DRAW
         else:
             self.current_player = self.player2 if self.current_player == self.player1 else self.player1
         return True
@@ -105,9 +119,9 @@ class Board:
     
     def placePiece(self, column, color):
         if column < 0 or column >= self.column:
-            return -1
+            raise OutofBoundsError("Invalid Column Received")
         
-        for i in range(len(self.row)-1, -1, -1):
+        for i in range(self.row-1, -1, -1):
             if not self.grid[i][column]:
                 self.grid[i][column] = color
                 return i
@@ -116,13 +130,13 @@ class Board:
     def checkDraw(self):
         return True if all(self.grid[0]) else False
     
-    def checkWinner(self, column, row) -> bool:
+    def checkWinner(self, column, row, color) -> bool:
         directions = [[0,1], [1,0], [1,1], [1, -1]]
 
         for dr, dc in directions:
             count = 1
-            count += self.countColors(row+dr, column+dc, dr, dc) 
-            count += self.countColors(row-dr, column-dc, -dr, -dc)
+            count += self.countColors(row+dr, column+dc, dr, dc, color) 
+            count += self.countColors(row-dr, column-dc, -dr, -dc, color)
             if count >= 4:
                 return True
         return False
@@ -130,16 +144,23 @@ class Board:
     def countColors(self, row, col, dr, dc, color):
         if row < 0 or row >= self.row or col < 0 or col > self.column:
             return 0
-        if self.grid[row][col] == color:
-            return 1 + self.countColors(row +dr, col + dc, dr, dc)
-        else: return 0
+        if self.grid[row][col] != color:
+            return 0
+        return 1 + self.countColors(row +dr, col + dc, dr, dc, color)
 
-    
-class Player:
-    def __init__(self, name, color: Color):
-        self.name = name
-        self.color = color
+if __name__ == "__main__":
+    p1 = Player("Alice", Color.RED)
+    p2 = Player("Bob", Color.BLUE)
+    game = Game(p1, p2)
 
+    game.makeMove(3)
+    game.makeMove(2)
+    game.makeMove(3)
+    game.makeMove(2)
+    game.makeMove(3)
+    game.makeMove(2)
+    game.makeMove(3)
 
-
-
+    #should produce erro
+    print(game.determineStatus())
+    print(game.getCurrentTurn())
