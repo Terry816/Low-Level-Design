@@ -85,15 +85,6 @@ class Size(Enum):
     MEDIUM = 2
     LARGE = 3
 
-"""
-    - compartments: Compartment[]
-    - accessTokenMapping: Map<string, AccessToken>
-
-    + Locker(compartments)
-    + depositPackage(size) -> string | error
-    + pickup(tokenCode) -> void | error
-    + openExpiredCompartments() -> void
-"""
 class OutofSpaceError(Exception):
     pass
 
@@ -102,6 +93,8 @@ class InvalidCodeError(Exception):
 
 class ExpiredTokenError(Exception):
     pass
+
+import threading 
 
 class Locker:
     def __init__(self, small=30, medium=10, large=5) -> None:
@@ -120,6 +113,8 @@ class Locker:
         self.accessTokenMapping = {} # code : AccessToken
         self.counter = 0 #counter is going to mimic the code generator
 
+        self.lock = threading.Lock()
+
     def _updateSizes(self, size, increment: bool):
         delta = 1
         if not increment:
@@ -133,23 +128,25 @@ class Locker:
             self.large += delta
 
     def depositPackage(self, size: Size):
-        if (size == Size.SMALL and self.small == 0) or (size == Size.MEDIUM and self.medium == 0) or (size == Size.LARGE and self.large == 0):
-            raise OutofSpaceError(f"Out of lockers of this size: {size}")
+        with self.lock:
 
-        self._updateSizes(size, False)
+            if (size == Size.SMALL and self.small == 0) or (size == Size.MEDIUM and self.medium == 0) or (size == Size.LARGE and self.large == 0):
+                raise OutofSpaceError(f"Out of lockers of this size: {size}")
+        
+            self._updateSizes(size, False)
 
-        compartment = None
-        for comp in self.compartments:
-            if comp.size == size and not comp.isOccupied():
-                compartment = comp
-                break
+            compartment = None
+            for comp in self.compartments:
+                if comp.size == size and not comp.isOccupied():
+                    compartment = comp
+                    break
 
-        if not compartment:
-            return None
-        compartment.markOccupied()
-        self.accessTokenMapping[self.counter] = AccessToken(self.counter, int(time.time()), compartment)
-        self.counter += 1
-        return self.counter -1
+            if not compartment:
+                return None
+            compartment.markOccupied()
+            self.accessTokenMapping[self.counter] = AccessToken(self.counter, int(time.time()), compartment)
+            self.counter += 1
+            return self.counter -1
 
     def pickup(self, tokenCode: int):
         if tokenCode not in self.accessTokenMapping:
@@ -160,21 +157,23 @@ class Locker:
         if access_token.isExpired():
             raise ExpiredTokenError("Token is Expired. Please come back later")
         
-        compart = access_token.compartment
-        size = compart.size
-        del self.accessTokenMapping[tokenCode]
-        
-        self._updateSizes(size, True)
-        compart.markFree()
+        with self.lock:
+            compart = access_token.compartment
+            size = compart.size
+            del self.accessTokenMapping[tokenCode]
+            
+            self._updateSizes(size, True)
+            compart.markFree()
 
     def openExpiredCompartments(self):
-        for code, access_token in list(self.accessTokenMapping.items()):
-            if access_token.isExpired():
-                compart = access_token.compartment
-                size = compart.getSize()
-                compart.markFree()
-                self._updateSizes(size, True)
-                del self.accessTokenMapping[code]
+        with self.lock:
+            for code, access_token in list(self.accessTokenMapping.items()):
+                if access_token.isExpired():
+                    compart = access_token.compartment
+                    size = compart.getSize()
+                    compart.markFree()
+                    self._updateSizes(size, True)
+                    del self.accessTokenMapping[code]
 
 
 class AccessToken:
